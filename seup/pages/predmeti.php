@@ -130,6 +130,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         exit;
     }
+
+    if ($action === 'preview_omot') {
+        require_once __DIR__ . '/../class/predmet_action_handler.class.php';
+        $predmet_id = GETPOST('predmet_id', 'int');
+
+        if (!$predmet_id) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'Missing predmet ID']);
+            exit;
+        }
+
+        Predmet_Action_Handler::handlePreviewOmot($db, $conf, $user, $langs, $predmet_id);
+        exit;
+    }
 }
 
 // Use helper to build ORDER BY
@@ -384,9 +398,9 @@ if (count($predmeti)) {
         // Action buttons
         print '<td class="seup-table-td">';
         print '<div class="seup-action-buttons">';
-        print '<a href="' . $url . '" class="seup-action-btn seup-btn-view" title="Pregled detalja">';
+        print '<button class="seup-action-btn seup-btn-view" title="Prepregled" data-id="' . $predmet->ID_predmeta . '">';
         print '<i class="fas fa-eye"></i>';
-        print '</a>';
+        print '</button>';
         print '<button class="seup-action-btn seup-btn-edit" title="Uredi" data-id="' . $predmet->ID_predmeta . '">';
         print '<i class="fas fa-edit"></i>';
         print '</button>';
@@ -489,6 +503,24 @@ print '<button type="button" class="seup-btn seup-btn-secondary" id="cancelArchi
 print '<button type="button" class="seup-btn seup-btn-danger" id="confirmArchiveBtn">';
 print '<i class="fas fa-archive me-2"></i>Arhiviraj';
 print '</button>';
+print '</div>';
+print '</div>';
+print '</div>';
+
+// Preview Modal
+print '<div class="seup-modal" id="omotPreviewModal">';
+print '<div class="seup-modal-content" style="max-width: 800px; max-height: 90vh;">';
+print '<div class="seup-modal-header">';
+print '<h5 class="seup-modal-title"><i class="fas fa-eye me-2"></i>Prepregled Omota Spisa</h5>';
+print '<button type="button" class="seup-modal-close" id="closeOmotModal">&times;</button>';
+print '</div>';
+print '<div class="seup-modal-body" style="max-height: 70vh; overflow-y: auto;">';
+print '<div id="omotPreviewContent">';
+print '<div class="seup-loading-message"><i class="fas fa-spinner fa-spin"></i> Učitavam prepregled...</div>';
+print '</div>';
+print '</div>';
+print '<div class="seup-modal-footer">';
+print '<button type="button" class="seup-btn seup-btn-secondary" id="closePreviewBtn">Zatvori</button>';
 print '</div>';
 print '</div>';
 print '</div>';
@@ -611,16 +643,23 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     });
 
+    document.querySelectorAll('.seup-btn-view').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.id;
+            openOmotPreview(id);
+        });
+    });
+
     document.querySelectorAll('.seup-btn-archive').forEach(btn => {
         btn.addEventListener('click', function() {
             const id = this.dataset.id;
             const row = this.closest('.seup-table-row');
             const klasaCell = row.querySelector('.seup-klasa-link');
             const nazivCell = row.querySelector('.seup-naziv-cell');
-            
+
             const klasa = klasaCell ? klasaCell.textContent : 'N/A';
             const naziv = nazivCell ? nazivCell.getAttribute('title') || nazivCell.textContent : 'N/A';
-            
+
             openArchiveModal(id, klasa, naziv);
         });
     });
@@ -647,6 +686,48 @@ document.addEventListener("DOMContentLoaded", function() {
             timeout = setTimeout(() => func.apply(this, args), wait);
         };
     }
+
+    // Preview Modal Functions
+    function openOmotPreview(predmetId) {
+        const modal = document.getElementById('omotPreviewModal');
+        const content = document.getElementById('omotPreviewContent');
+
+        modal.classList.add('show');
+        content.innerHTML = '<div class="seup-loading-message"><i class="fas fa-spinner fa-spin"></i> Učitavam prepregled...</div>';
+
+        const formData = new FormData();
+        formData.append('action', 'preview_omot');
+        formData.append('predmet_id', predmetId);
+
+        fetch('', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                content.innerHTML = data.preview_html;
+            } else {
+                content.innerHTML = '<div class="seup-alert seup-alert-error">Greška pri učitavanju prepregleda: ' + data.error + '</div>';
+            }
+        })
+        .catch(error => {
+            content.innerHTML = '<div class="seup-alert seup-alert-error">Došlo je do greške pri učitavanju prepregleda</div>';
+        });
+    }
+
+    function closeOmotPreview() {
+        document.getElementById('omotPreviewModal').classList.remove('show');
+    }
+
+    document.getElementById('closeOmotModal').addEventListener('click', closeOmotPreview);
+    document.getElementById('closePreviewBtn').addEventListener('click', closeOmotPreview);
+
+    document.getElementById('omotPreviewModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeOmotPreview();
+        }
+    });
 
     // Toast message function
     window.showMessage = function(message, type = 'success', duration = 5000) {
