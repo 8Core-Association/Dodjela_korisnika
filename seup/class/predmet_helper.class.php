@@ -372,8 +372,13 @@ class Predmet_helper
         }
         $klasaMapJson = json_encode($klasaMap);
 
-        // Fetch zaposlenik options
-        $sql = "SELECT ID, ime_prezime FROM " . MAIN_DB_PREFIX . "a_interna_oznaka_korisnika ORDER BY ime_prezime ASC";
+        // Fetch zaposlenik options (using direct JOIN with llx_user)
+        $sql = "SELECT iok.ID, CONCAT(u.firstname, ' ', u.lastname) as ime_prezime
+                FROM " . MAIN_DB_PREFIX . "a_interna_oznaka_korisnika iok
+                INNER JOIN " . MAIN_DB_PREFIX . "user u
+                  ON CONCAT(u.firstname, ' ', u.lastname) = iok.ime_prezime
+                WHERE u.employee = 1
+                ORDER BY u.firstname ASC, u.lastname ASC";
         $resql = $db->query($sql);
         $zaposlenikOptions = '<option value="">Odaberite zaposlenika</option>';
         if ($resql) {

@@ -364,7 +364,12 @@ if (count($predmeti)) {
             print '<td class="seup-table-td">';
             print '<select class="seup-assign-select" data-predmet-id="' . $predmet->ID_predmeta . '">';
             print '<option value="">-- Dodijeli --</option>';
-            $sql_users = "SELECT ID, ime_prezime FROM " . MAIN_DB_PREFIX . "a_interna_oznaka_korisnika ORDER BY ime_prezime ASC";
+            $sql_users = "SELECT iok.ID, CONCAT(u.firstname, ' ', u.lastname) as ime_prezime
+                          FROM " . MAIN_DB_PREFIX . "a_interna_oznaka_korisnika iok
+                          INNER JOIN " . MAIN_DB_PREFIX . "user u
+                            ON CONCAT(u.firstname, ' ', u.lastname) = iok.ime_prezime
+                          WHERE u.employee = 1
+                          ORDER BY u.firstname ASC, u.lastname ASC";
             $resql_users = $db->query($sql_users);
             if ($resql_users) {
                 while ($obj_user = $db->fetch_object($resql_users)) {
