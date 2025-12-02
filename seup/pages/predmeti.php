@@ -87,22 +87,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'archive_predmet') {
         header('Content-Type: application/json');
         ob_end_clean();
-        
+
         $predmet_id = GETPOST('predmet_id', 'int');
         $razlog = GETPOST('razlog', 'alphanohtml');
         $fk_arhivska_gradiva = GETPOST('fk_arhivska_gradiva', 'int');
         $postupak_po_isteku = GETPOST('postupak_po_isteku', 'alpha');
-        
+
         if (!$predmet_id) {
             echo json_encode(['success' => false, 'error' => 'Missing predmet ID']);
             exit;
         }
-        
+
         // Ensure new archive table structure
         Predmet_helper::ensureArhivaTableStructure($db);
-        
+
         $result = Predmet_helper::archivePredmetNew($db, $conf, $user, $predmet_id, $razlog, $fk_arhivska_gradiva, $postupak_po_isteku);
         echo json_encode($result);
+        exit;
+    }
+
+    if ($action === 'assign_predmet' && !empty($user->admin)) {
+        header('Content-Type: application/json');
+        ob_end_clean();
+
+        $predmet_id = GETPOST('predmet_id', 'int');
+        $interna_oznaka_id = GETPOST('interna_oznaka_id', 'int');
+
+        if (!$predmet_id || !$interna_oznaka_id) {
+            echo json_encode(['success' => false, 'error' => 'Missing parameters']);
+            exit;
+        }
+
+        $sql = "UPDATE " . MAIN_DB_PREFIX . "a_predmet
+                SET ID_interna_oznaka_korisnika = " . (int)$interna_oznaka_id . "
+                WHERE ID_predmeta = " . (int)$predmet_id;
+
+        $result = $db->query($sql);
+        if ($result) {
+            echo json_encode(['success' => true, 'message' => 'Predmet uspješno dodijeljen']);
+        } else {
+            echo json_encode(['success' => false, 'error' => $db->lasterror()]);
+        }
         exit;
     }
 }
@@ -111,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $orderByClause = Predmet_helper::buildOrderByKlasa($sortField, $sortOrder);
 
 // Fetch all open cases with proper sorting
-$sql = "SELECT 
+$sql = "SELECT
             p.ID_predmeta,
             p.klasa_br,
             p.sadrzaj,
@@ -121,6 +146,7 @@ $sql = "SELECT
             p.naziv_predmeta,
             p.naziv as posiljatelj_naziv,
             p.zaprimljeno_datum,
+            p.ID_interna_oznaka_korisnika,
             DATE_FORMAT(p.tstamp_created, '%d/%m/%Y') as datum_otvaranja,
             u.name_ustanova,
             k.ime_prezime,
@@ -131,8 +157,16 @@ $sql = "SELECT
         LEFT JOIN " . MAIN_DB_PREFIX . "a_klasifikacijska_oznaka ko ON p.ID_klasifikacijske_oznake = ko.ID_klasifikacijske_oznake
         WHERE p.ID_predmeta NOT IN (
             SELECT ID_predmeta FROM " . MAIN_DB_PREFIX . "a_arhiva WHERE status_arhive = 'active'
-        )
-        {$orderByClause}";
+        )";
+
+if (empty($user->admin)) {
+    $sql .= " AND p.ID_interna_oznaka_korisnika IN (
+        SELECT ID FROM " . MAIN_DB_PREFIX . "a_interna_oznaka_korisnika
+        WHERE fk_user = " . (int)$user->id . "
+    )";
+}
+
+$sql .= " {$orderByClause}";
 
 $resql = $db->query($sql);
 $predmeti = [];
@@ -261,6 +295,9 @@ print '<th class="seup-table-th"><i class="fas fa-paper-plane me-2"></i>Pošilja
 print '<th class="seup-table-th"><i class="fas fa-inbox me-2"></i>Zaprimljeno</th>';
 print sortableHeader('ime_prezime', 'Zaposlenik', $sortField, $sortOrder, 'fas fa-user');
 print sortableHeader('tstamp_created', 'Otvoreno', $sortField, $sortOrder, 'fas fa-calendar');
+if (!empty($user->admin)) {
+    print '<th class="seup-table-th"><i class="fas fa-user-tag me-2"></i>Dodijeljeno</th>';
+}
 print '<th class="seup-table-th"><i class="fas fa-cogs me-2"></i>Akcije</th>';
 print '</tr>';
 print '</thead>';
@@ -322,6 +359,22 @@ if (count($predmeti)) {
         print $predmet->datum_otvaranja;
         print '</div>';
         print '</td>';
+
+        if (!empty($user->admin)) {
+            print '<td class="seup-table-td">';
+            print '<select class="seup-assign-select" data-predmet-id="' . $predmet->ID_predmeta . '">';
+            print '<option value="">-- Dodijeli --</option>';
+            $sql_users = "SELECT ID, ime_prezime FROM " . MAIN_DB_PREFIX . "a_interna_oznaka_korisnika ORDER BY ime_prezime ASC";
+            $resql_users = $db->query($sql_users);
+            if ($resql_users) {
+                while ($obj_user = $db->fetch_object($resql_users)) {
+                    $selected = ($obj_user->ID == $predmet->ID_interna_oznaka_korisnika) ? ' selected' : '';
+                    print '<option value="' . $obj_user->ID . '"' . $selected . '>' . htmlspecialchars($obj_user->ime_prezime) . '</option>';
+                }
+            }
+            print '</select>';
+            print '</td>';
+        }
 
         // Action buttons
         print '<td class="seup-table-td">';
@@ -719,6 +772,46 @@ document.addEventListener("DOMContentLoaded", function() {
             closeArchiveModal();
         }
     });
+
+    // Handle assign select change
+    document.querySelectorAll('.seup-assign-select').forEach(select => {
+        select.addEventListener('change', function() {
+            const predmetId = this.dataset.predmetId;
+            const internaOznakaId = this.value;
+
+            if (!internaOznakaId) return;
+
+            const originalValue = this.querySelector('option[selected]')?.value || '';
+
+            const formData = new FormData();
+            formData.append('action', 'assign_predmet');
+            formData.append('predmet_id', predmetId);
+            formData.append('interna_oznaka_id', internaOznakaId);
+
+            fetch('predmeti.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message, 'success');
+                    this.querySelector(`option[value="${internaOznakaId}"]`).setAttribute('selected', 'selected');
+                    if (originalValue) {
+                        this.querySelector(`option[value="${originalValue}"]`)?.removeAttribute('selected');
+                    }
+                } else {
+                    showMessage('Greška: ' + data.error, 'error');
+                    this.value = originalValue;
+                }
+            })
+            .catch(error => {
+                console.error('Assign error:', error);
+                showMessage('Došlo je do greške', 'error');
+                this.value = originalValue;
+            });
+        });
+    });
 });
 </script>
 
@@ -801,6 +894,26 @@ document.addEventListener("DOMContentLoaded", function() {
   font-size: var(--text-sm);
   background: white;
   min-width: 180px;
+}
+
+.seup-assign-select {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  background: white;
+  min-width: 160px;
+  transition: all var(--transition-fast);
+}
+
+.seup-assign-select:hover {
+  border-color: var(--primary-400);
+}
+
+.seup-assign-select:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 /* Enhanced Table Styles */

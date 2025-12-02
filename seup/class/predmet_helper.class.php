@@ -176,13 +176,13 @@ class Predmet_helper
             // Check if naziv column exists (for pošiljatelj name)
             $sql = "SHOW COLUMNS FROM " . MAIN_DB_PREFIX . "a_predmet LIKE 'naziv'";
             $result = $db->query($sql);
-            
+
             if ($db->num_rows($result) == 0) {
                 dol_syslog("Adding naziv column to a_predmet table", LOG_INFO);
-                
-                $sql = "ALTER TABLE " . MAIN_DB_PREFIX . "a_predmet 
+
+                $sql = "ALTER TABLE " . MAIN_DB_PREFIX . "a_predmet
                         ADD COLUMN naziv VARCHAR(255) DEFAULT NULL COMMENT 'Naziv pošiljatelja'";
-                
+
                 $result = $db->query($sql);
                 if ($result) {
                     dol_syslog("naziv column added successfully", LOG_INFO);
@@ -190,17 +190,17 @@ class Predmet_helper
                     dol_syslog("Failed to add naziv column: " . $db->lasterror(), LOG_ERR);
                 }
             }
-            
+
             // Check if zaprimljeno_datum column exists
             $sql = "SHOW COLUMNS FROM " . MAIN_DB_PREFIX . "a_predmet LIKE 'zaprimljeno_datum'";
             $result = $db->query($sql);
-            
+
             if ($db->num_rows($result) == 0) {
                 dol_syslog("Adding zaprimljeno_datum column to a_predmet table", LOG_INFO);
-                
-                $sql = "ALTER TABLE " . MAIN_DB_PREFIX . "a_predmet 
+
+                $sql = "ALTER TABLE " . MAIN_DB_PREFIX . "a_predmet
                         ADD COLUMN zaprimljeno_datum datetime DEFAULT NULL COMMENT 'Datum zaprimanja predmeta'";
-                
+
                 $result = $db->query($sql);
                 if ($result) {
                     dol_syslog("zaprimljeno_datum column added successfully", LOG_INFO);
@@ -208,9 +208,27 @@ class Predmet_helper
                     dol_syslog("Failed to add zaprimljeno_datum column: " . $db->lasterror(), LOG_ERR);
                 }
             }
-            
+
+            // Check if fk_user exists in a_interna_oznaka_korisnika
+            $sql = "SHOW COLUMNS FROM " . MAIN_DB_PREFIX . "a_interna_oznaka_korisnika LIKE 'fk_user'";
+            $result = $db->query($sql);
+
+            if ($db->num_rows($result) == 0) {
+                dol_syslog("Adding fk_user column to a_interna_oznaka_korisnika table", LOG_INFO);
+
+                $sql = "ALTER TABLE " . MAIN_DB_PREFIX . "a_interna_oznaka_korisnika
+                        ADD COLUMN fk_user INT(11) DEFAULT NULL COMMENT 'Link to Dolibarr user'";
+
+                $result = $db->query($sql);
+                if ($result) {
+                    dol_syslog("fk_user column added successfully", LOG_INFO);
+                } else {
+                    dol_syslog("Failed to add fk_user column: " . $db->lasterror(), LOG_ERR);
+                }
+            }
+
             return true;
-            
+
         } catch (Exception $e) {
             dol_syslog("Error ensuring predmet columns: " . $e->getMessage(), LOG_ERR);
             return false;
