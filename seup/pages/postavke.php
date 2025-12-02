@@ -154,13 +154,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($obj->cnt > 0) setEventMessages($langs->trans("Korisnik s tim rednim brojem vec postoji u bazi"), null, 'errors');
         else {
           $db->begin();
-          $sql = "INSERT INTO " . MAIN_DB_PREFIX . "a_interna_oznaka_korisnika (ID_ustanove, ime_prezime, rbr, naziv) VALUES ("
-                . (int)$ID_ustanove . ", '"
-                . $db->escape($interna_oznaka_korisnika->getIme_prezime()) . "', '"
-                . $db->escape($interna_oznaka_korisnika->getRbr_korisnika()) . "', '"
-                . $db->escape($interna_oznaka_korisnika->getRadno_mjesto_korisnika()) . "')";
-          if ($db->query($sql)) { $db->commit(); setEventMessages($langs->trans("Intena Oznaka Korisnika uspjesno dodana"), null, 'mesgs'); }
-          else setEventMessages($langs->trans("Database error: ") . $db->lasterror(), null, 'errors');
+
+          $newDolibarrUser = new User($db);
+          $nameParts = explode(' ', $interna_oznaka_korisnika->getIme_prezime(), 2);
+          $newDolibarrUser->lastname = isset($nameParts[1]) ? $nameParts[1] : $nameParts[0];
+          $newDolibarrUser->firstname = $nameParts[0];
+          $newDolibarrUser->login = 'seup_' . strtolower(str_replace(' ', '_', $interna_oznaka_korisnika->getIme_prezime()));
+          $newDolibarrUser->pass = bin2hex(random_bytes(16));
+          $newDolibarrUser->admin = 0;
+          $newDolibarrUser->statut = 1;
+          $newDolibarrUser->employee = 1;
+
+          $userCreateResult = $newDolibarrUser->create($user);
+
+          if ($userCreateResult > 0) {
+            $sql = "INSERT INTO " . MAIN_DB_PREFIX . "a_interna_oznaka_korisnika (ID_ustanove, ime_prezime, rbr, naziv, llx_user) VALUES ("
+                  . (int)$ID_ustanove . ", '"
+                  . $db->escape($interna_oznaka_korisnika->getIme_prezime()) . "', '"
+                  . $db->escape($interna_oznaka_korisnika->getRbr_korisnika()) . "', '"
+                  . $db->escape($interna_oznaka_korisnika->getRadno_mjesto_korisnika()) . "', "
+                  . (int)$newDolibarrUser->id . ")";
+
+            if ($db->query($sql)) {
+              $db->commit();
+              setEventMessages($langs->trans("Intena Oznaka Korisnika uspjesno dodana") . " (Dolibarr user ID: " . $newDolibarrUser->id . ")", null, 'mesgs');
+            } else {
+              $db->rollback();
+              setEventMessages($langs->trans("Database error: ") . $db->lasterror(), null, 'errors');
+            }
+          } else {
+            $db->rollback();
+            setEventMessages($langs->trans("Failed to create Dolibarr user: ") . $newDolibarrUser->error, null, 'errors');
+          }
         }
       }
     }
