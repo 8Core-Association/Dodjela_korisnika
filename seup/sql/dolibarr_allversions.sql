@@ -48,12 +48,52 @@ CREATE TABLE IF NOT EXISTS llx_a_interna_oznaka_korisnika (
     ime_prezime varchar(255) NOT NULL,
     rbr int(11) NOT NULL,
     naziv varchar(255) NOT NULL,
+    fk_user int(11) DEFAULT NULL COMMENT 'Link to llx_user table for filtering',
     PRIMARY KEY (ID),
     UNIQUE KEY unique_rbr (rbr),
     KEY fk_ustanova_korisnik (ID_ustanove),
+    KEY fk_user_idx (fk_user),
     CONSTRAINT fk_interna_oznaka_ustanova FOREIGN KEY (ID_ustanove)
-        REFERENCES llx_a_oznaka_ustanove(ID_ustanove) ON DELETE RESTRICT ON UPDATE CASCADE
+        REFERENCES llx_a_oznaka_ustanove(ID_ustanove) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_interna_oznaka_user FOREIGN KEY (fk_user)
+        REFERENCES llx_user(rowid) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Add fk_user column if it doesn't exist (for existing installations)
+SET @exist := (SELECT COUNT(*) FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'llx_a_interna_oznaka_korisnika'
+               AND COLUMN_NAME = 'fk_user');
+SET @sqlstmt := IF(@exist = 0,
+                   'ALTER TABLE llx_a_interna_oznaka_korisnika ADD COLUMN fk_user int(11) DEFAULT NULL COMMENT ''Link to llx_user table for filtering''',
+                   'SELECT ''Column fk_user already exists''');
+PREPARE stmt FROM @sqlstmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Add foreign key constraint if column was just added
+SET @exist := (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+               WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'llx_a_interna_oznaka_korisnika'
+               AND CONSTRAINT_NAME = 'fk_interna_oznaka_user');
+SET @sqlstmt := IF(@exist = 0,
+                   'ALTER TABLE llx_a_interna_oznaka_korisnika ADD CONSTRAINT fk_interna_oznaka_user FOREIGN KEY (fk_user) REFERENCES llx_user(rowid) ON DELETE SET NULL ON UPDATE CASCADE',
+                   'SELECT ''Constraint fk_interna_oznaka_user already exists''');
+PREPARE stmt FROM @sqlstmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Add index for fk_user if it doesn't exist
+SET @exist := (SELECT COUNT(*) FROM information_schema.STATISTICS
+               WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'llx_a_interna_oznaka_korisnika'
+               AND INDEX_NAME = 'fk_user_idx');
+SET @sqlstmt := IF(@exist = 0,
+                   'ALTER TABLE llx_a_interna_oznaka_korisnika ADD KEY fk_user_idx (fk_user)',
+                   'SELECT ''Index fk_user_idx already exists''');
+PREPARE stmt FROM @sqlstmt;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 
 -- =============================================================================
