@@ -209,21 +209,21 @@ class Predmet_helper
                 }
             }
 
-            // Check if fk_user exists in a_interna_oznaka_korisnika
-            $sql = "SHOW COLUMNS FROM " . MAIN_DB_PREFIX . "a_interna_oznaka_korisnika LIKE 'fk_user'";
+            // Check if llx_user exists in a_interna_oznaka_korisnika
+            $sql = "SHOW COLUMNS FROM " . MAIN_DB_PREFIX . "a_interna_oznaka_korisnika LIKE 'llx_user'";
             $result = $db->query($sql);
 
             if ($db->num_rows($result) == 0) {
-                dol_syslog("Adding fk_user column to a_interna_oznaka_korisnika table", LOG_INFO);
+                dol_syslog("Adding llx_user column to a_interna_oznaka_korisnika table", LOG_INFO);
 
                 $sql = "ALTER TABLE " . MAIN_DB_PREFIX . "a_interna_oznaka_korisnika
-                        ADD COLUMN fk_user INT(11) DEFAULT NULL COMMENT 'Link to Dolibarr user'";
+                        ADD COLUMN llx_user INT(11) DEFAULT NULL COMMENT 'Link to Dolibarr user'";
 
                 $result = $db->query($sql);
                 if ($result) {
-                    dol_syslog("fk_user column added successfully", LOG_INFO);
+                    dol_syslog("llx_user column added successfully", LOG_INFO);
                 } else {
-                    dol_syslog("Failed to add fk_user column: " . $db->lasterror(), LOG_ERR);
+                    dol_syslog("Failed to add llx_user column: " . $db->lasterror(), LOG_ERR);
                 }
             }
 
